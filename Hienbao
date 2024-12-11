@@ -1,0 +1,244 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+
+-- UI Creation
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CompactWarning" 
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game.CoreGui
+
+-- Main Container (đã giảm kích thước và tăng vị trí)
+local MainContainer = Instance.new("Frame")
+MainContainer.Name = "MainContainer"
+MainContainer.Size = UDim2.new(0, 180, 0, 70)
+MainContainer.Position = UDim2.new(0.5, -90, 0, -70)
+MainContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainContainer.BackgroundTransparency = 0.1
+MainContainer.BorderSizePixel = 0
+MainContainer.Visible = false
+MainContainer.Parent = ScreenGui
+
+-- Rounded Corners
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainContainer
+
+-- Warning Icon (điều chỉnh kích thước và vị trí)
+local WarningIcon = Instance.new("ImageLabel")
+WarningIcon.Size = UDim2.new(0, 16, 0, 16) -- Giảm kích thước
+WarningIcon.Position = UDim2.new(0, 8, 0, 8)
+WarningIcon.BackgroundTransparency = 1
+WarningIcon.Image = "rbxassetid://6031071053"
+WarningIcon.ImageColor3 = Color3.fromRGB(255, 70, 70)
+WarningIcon.Parent = MainContainer
+
+-- Warning Title (điều chỉnh kích thước và vị trí)
+local WarningTitle = Instance.new("TextLabel")
+WarningTitle.Size = UDim2.new(1, -30, 0, 16)
+WarningTitle.Position = UDim2.new(0, 30, 0, 8)
+WarningTitle.BackgroundTransparency = 1
+WarningTitle.Font = Enum.Font.GothamBold
+WarningTitle.TextSize = 11
+WarningTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+WarningTitle.TextXAlignment = Enum.TextXAlignment.Left
+WarningTitle.Text = "CẢNH BÁO PHÁT HIỆN"
+WarningTitle.Parent = MainContainer
+
+-- Warning Description (điều chỉnh kích thước và vị trí)
+local WarningDesc = Instance.new("TextLabel")
+WarningDesc.Size = UDim2.new(1, -16, 0, 25)
+WarningDesc.Position = UDim2.new(0, 8, 0, 28)
+WarningDesc.BackgroundTransparency = 1
+WarningDesc.Font = Enum.Font.Gotham
+WarningDesc.TextSize = 10
+WarningDesc.TextColor3 = Color3.fromRGB(200, 200, 200)
+WarningDesc.TextWrapped = true
+WarningDesc.TextXAlignment = Enum.TextXAlignment.Left
+WarningDesc.RichText = true -- Bật RichText để hỗ trợ màu
+WarningDesc.Parent = MainContainer
+
+-- Progress Bar (điều chỉnh kích thước và vị trí)
+local ProgressBG = Instance.new("Frame")
+ProgressBG.Size = UDim2.new(1, -16, 0, 2)
+ProgressBG.Position = UDim2.new(0, 8, 1, -6)
+ProgressBG.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ProgressBG.BorderSizePixel = 0
+ProgressBG.Parent = MainContainer
+
+local ProgressBar = Instance.new("Frame")
+ProgressBar.Size = UDim2.new(0, 0, 1, 0)
+ProgressBar.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
+ProgressBar.BorderSizePixel = 0
+ProgressBar.Parent = ProgressBG
+
+local UICorner_ProgressBar = Instance.new("UICorner")
+UICorner_ProgressBar.CornerRadius = UDim.new(1, 0)
+UICorner_ProgressBar.Parent = ProgressBar
+
+-- Settings
+_G.WatchingESPSettings = {
+    Enabled = true,
+    MaxDistance = 100,
+    FieldOfView = 60,
+    AnimationSpeed = 0.5,
+    AlertDuration = 3,
+    YOffset = -20,
+    MaxWatchers = 20, -- Thêm giới hạn người xem tối đa
+    Colors = {
+        Low = Color3.fromRGB(255, 200, 70),
+        Medium = Color3.fromRGB(255, 140, 70),
+        High = Color3.fromRGB(255, 70, 70)
+    }
+}
+
+local watchingPlayers = {}
+local playerColors = {} -- Thêm dòng này để khởi tạo bảng lưu màu
+
+local function GetRandomColor()
+    local colors = {
+        Color3.fromRGB(255, 100, 100), -- Đỏ
+        Color3.fromRGB(100, 255, 100), -- Lục
+        Color3.fromRGB(100, 100, 255), -- Lam
+        Color3.fromRGB(255, 255, 100), -- Vàng
+        Color3.fromRGB(255, 100, 255), -- Hồng
+        Color3.fromRGB(100, 255, 255)  -- Xanh ngọc
+    }
+    return colors[math.random(1, #colors)]
+end
+
+-- Hàm kiểm tra người chơi có đang nhìn vào bạn không
+local function IsPlayerLookingAtYou(player)
+    if not player.Character or not LocalPlayer.Character then return false end
+    
+    local playerHead = player.Character:FindFirstChild("Head")
+    local localHead = LocalPlayer.Character:FindFirstChild("Head")
+    
+    if not playerHead or not localHead then return false end
+    
+    -- Tính khoảng cách
+    local distance = (playerHead.Position - localHead.Position).Magnitude
+    if distance > _G.WatchingESPSettings.MaxDistance then return false end
+    
+    -- Lấy hướng nhìn
+    local lookVector = playerHead.CFrame.LookVector
+    local directionToLocal = (localHead.Position - playerHead.Position).Unit
+    
+    -- Tính góc
+    local angle = math.acos(lookVector:Dot(directionToLocal))
+    local degrees = math.deg(angle)
+    
+    -- Kiểm tra góc nhìn
+    return degrees <= _G.WatchingESPSettings.FieldOfView / 2
+end
+
+-- Animation Functions
+local function ShowWarning()
+    MainContainer.Position = UDim2.new(0.5, -90, 0, -70)
+    MainContainer.Visible = true
+    
+    local tween = TweenService:Create(MainContainer, 
+        TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Position = UDim2.new(0.5, -90, 0, _G.WatchingESPSettings.YOffset)} -- Sử dụng YOffset
+    )
+    tween:Play()
+end
+
+local function HideWarning()
+    local tween = TweenService:Create(MainContainer,
+        TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+        {Position = UDim2.new(0.5, -90, 0, -70)}
+    )
+    tween:Play()
+    tween.Completed:Wait()
+    MainContainer.Visible = false
+end
+
+local function UpdateProgress(threatLevel)
+    local tween = TweenService:Create(ProgressBar,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quad),
+        {Size = UDim2.new(threatLevel, 0, 1, 0)}
+    )
+    tween:Play()
+    
+    local color
+    if threatLevel < 0.4 then
+        color = _G.WatchingESPSettings.Colors.Low
+    elseif threatLevel < 0.7 then
+        color = _G.WatchingESPSettings.Colors.Medium
+    else
+        color = _G.WatchingESPSettings.Colors.High
+    end
+    
+    TweenService:Create(ProgressBar,
+        TweenInfo.new(0.3),
+        {BackgroundColor3 = color}
+    ):Play()
+    
+    TweenService:Create(WarningIcon,
+        TweenInfo.new(0.3),
+        {ImageColor3 = color}
+    ):Play()
+end
+
+-- Update Function
+local function UpdateWarning()
+    if not LocalPlayer.Character then return end
+    
+    watchingPlayers = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and IsPlayerLookingAtYou(player) then
+            table.insert(watchingPlayers, player)
+            if not playerColors[player.Name] then
+                playerColors[player.Name] = GetRandomColor()
+            end
+        end
+    end
+    
+    if #watchingPlayers > 0 then
+        if not MainContainer.Visible then
+            ShowWarning()
+        end
+        
+        local threatLevel = #watchingPlayers / _G.WatchingESPSettings.MaxWatchers
+        threatLevel = math.min(threatLevel, 1)
+        
+        local playerNames = {}
+        for _, player in ipairs(watchingPlayers) do
+            local color = playerColors[player.Name]
+            local r, g, b = math.floor(color.R * 255), math.floor(color.G * 255), math.floor(color.B * 255)
+            table.insert(playerNames, string.format('<font color="rgb(%d,%d,%d)">%s</font>', r, g, b, player.Name))
+        end
+        local names = table.concat(playerNames, ", ")
+        
+        WarningDesc.Text = string.format(
+            "%d người chơi đang nhìn bạn\n%s",
+            #watchingPlayers,
+            names
+        )
+        
+        UpdateProgress(threatLevel)
+    else
+        if MainContainer.Visible then
+            HideWarning()
+        end
+    end
+end
+
+-- Main Loop
+RunService.RenderStepped:Connect(function()
+    if _G.WatchingESPSettings.Enabled then
+        UpdateWarning()
+    elseif MainContainer.Visible then
+        HideWarning()
+    end
+end)
+
+-- Clean up
+Players.PlayerRemoving:Connect(function(player)
+    if table.find(watchingPlayers, player) then
+        table.remove(watchingPlayers, table.find(watchingPlayers, player))
+        UpdateWarning()
+    end
+end)
